@@ -1,0 +1,130 @@
+
+## 1. Setting Up the Environment
+
+### a. Docker Installation
+1. Installed Docker to manage and run Spark containers.
+2. Pulled the Spark image for Python and Scala from Docker Hub:
+   ```bash
+   docker pull apache/spark
+   ```
+
+### b. Scala Kernel Configuration
+1. Configured the **Almond Scala kernel** for Jupyter Notebook:
+   - Installed the Almond kernel:
+     ```bash
+     coursier launch almond --scala 2.12.10 -- --install
+     ```
+   - Verified the kernel was available in Jupyter Notebook.
+
+---
+
+## 2. Loading the Dataset
+
+### a. Dataset Acquisition
+1. Downloaded the `netflix_titles.csv` dataset from Kaggle.
+2. Placed the file in the `data` folder of the project directory.
+
+### b. Data Loading in Spark
+1. Used Spark's `read.csv` function to load the dataset:
+   ```scala
+   val netflixDF = spark.read
+       .option("header", "true")
+       .option("inferSchema", "true")
+       .csv("data/netflix_titles.csv")
+   ```
+2. Verified the dataset was loaded correctly using:
+   ```scala
+   netflixDF.show(5)
+   ```
+
+---
+
+## 3. Data Cleaning
+
+### a. Column Renaming
+- Renamed columns to remove spaces and special characters:
+  ```scala
+  val cleanedDF = netflixDF.columns.foldLeft(netflixDF)((df, col) =>
+      df.withColumnRenamed(col, col.replaceAll(" ", "_").toLowerCase())
+  )
+  ```
+
+### b. Handling Missing Values
+1. Dropped rows with null values in critical columns like `title`, `listed_in`, and `release_year`:
+   ```scala
+   val filteredDF = cleanedDF.na.drop(Seq("title", "listed_in", "release_year"))
+   ```
+2. Verified the data quality by checking the row count before and after filtering:
+   ```scala
+   println(s"Row count before: ${netflixDF.count()}")
+   println(s"Row count after: ${filteredDF.count()}")
+   ```
+
+---
+
+## 4. Exploratory Data Analysis (EDA)
+
+### a. Content Distribution by Release Year
+1. Grouped content by release year and counted the number of titles:
+   ```scala
+   val releaseYearDF = filteredDF.groupBy("release_year").count().orderBy("release_year")
+   releaseYearDF.show()
+   ```
+2. Observed trends in Netflix content over time.
+
+### b. Top 10 Genres
+1. Split the `listed_in` column to analyze genres:
+   ```scala
+   import org.apache.spark.sql.functions._
+   val genresDF = filteredDF.select(explode(split(col("listed_in"), ",")).alias("genre"))
+   val topGenres = genresDF.groupBy("genre").count().orderBy(desc("count"))
+   topGenres.show(10)
+   ```
+2. Visualized the top genres using Plotly.
+
+### c. Country-wise Content Distribution
+1. Grouped content by country to identify top content producers:
+   ```scala
+   val countryDF = filteredDF.groupBy("country").count().orderBy(desc("count"))
+   countryDF.show(10)
+   ```
+
+### d. Ratings Analysis
+- Explored the distribution of content ratings:
+  ```scala
+  val ratingsDF = filteredDF.groupBy("rating").count().orderBy(desc("count"))
+  ratingsDF.show()
+  ```
+
+---
+
+## 5. Visualizations
+
+### a. Plotly Integration
+1. Initialized Plotly in the Scala notebook:
+   ```scala
+   import plotly._, plotly.element._, plotly.layout._, plotly.Almond._
+   init(offline=true)
+   ```
+2. Created a bar chart for top genres:
+   ```scala
+   val (x, y) = topGenres.select("genre", "count").collect.map(r => (r(0).toString, r(1).toString.toDouble)).unzip
+   Bar(x, y).plot()
+   ```
+
+### b. Yearly Content Trend
+1. Visualized content addition trends over years:
+   ```scala
+   val (years, counts) = releaseYearDF.select("release_year", "count").collect.map(r => (r(0).toString, r(1).toString.toDouble)).unzip
+   Line(years, counts).plot()
+   ```
+
+---
+
+## 6. Conclusion
+- Extracted meaningful insights about Netflix's content library.
+- Used Spark's distributed processing capabilities for efficient analysis.
+- Created visualizations to communicate the findings effectively.
+
+
+
